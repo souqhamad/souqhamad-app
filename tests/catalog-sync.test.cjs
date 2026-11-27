@@ -5,9 +5,9 @@ const path = require("node:path");
 const vm = require("node:vm");
 const ts = require("typescript");
 
-function syncCatalog(coordinates, categoriesSource = "throw new Error('Do not execute catalog source'); export const marketplaceCategoryDefinitions = [{id:'cars',label:'New server category',group:'vehicles'}];") {
+function syncCatalog(coordinates, categoriesSource = "throw new Error('Do not execute catalog source'); export const marketplaceCategoryDefinitions = [{id:'cars',label:'New server category',group:'vehicles'}];", useSiblingCheckout = false) {
   const appRoot = path.resolve(__dirname, "..");
-  const serverRoot = path.resolve(appRoot, "fixture-server");
+  const serverRoot = path.resolve(appRoot, useSiblingCheckout ? "../server" : "fixture-server");
   const script = path.join(appRoot, "scripts/sync-market-catalog.cjs");
   const fixtures = new Map([
     ["lib/marketplace/categories.ts", categoriesSource],
@@ -23,10 +23,11 @@ function syncCatalog(coordinates, categoriesSource = "throw new Error('Do not ex
     vm.runInNewContext(fs.readFileSync(filename, "utf8"), {
       __dirname: path.dirname(filename),
       module,
-      process: { env: { SMARTSTORE_SERVER_ROOT: serverRoot } },
+      process: { env: useSiblingCheckout ? {} : { SMARTSTORE_SERVER_ROOT: serverRoot } },
       console: { log: () => {} },
       require: id => {
         if (id === "node:fs") return {
+          existsSync: filename => fixtures.has(filename),
           readFileSync: filename => {
             assert.ok(fixtures.has(filename), `Unexpected file read ${filename}`);
             return fixtures.get(filename);
@@ -55,6 +56,13 @@ test("catalog sync reads shared server definitions and preserves mobile coordina
   assert.equal(catalog.categories[0].carModels.toyota[0].id, "camry");
   assert.equal(catalog.policies.terms.title, "Current server policy");
   assert.deepEqual(catalog.cities, ["الرياض", "جدة"]);
+});
+
+test("catalog sync finds the sibling server checkout without environment overrides", () => {
+  const harness = syncCatalog([{ city: "الرياض", latitude: 24.7, longitude: 46.6 }], undefined, true);
+  harness.run();
+  assert.equal(harness.writes.length, 1);
+  assert.equal(JSON.parse(harness.writes[0].value).policies.terms.title, "Current server policy");
 });
 
 test("invalid coordinate artifacts abort catalog sync before any file is written", () => {

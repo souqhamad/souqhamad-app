@@ -34,7 +34,7 @@ function appConfig(environment) {
   return module.exports.default({ config: {} });
 }
 
-test("non-Codemagic Expo configuration starts above confirmed store code 432", () => {
+test("non-Codemagic Expo configuration starts above recorded store code 515", () => {
   for (const environment of [
     {},
     { APP_VARIANT: "production" },
@@ -42,9 +42,8 @@ test("non-Codemagic Expo configuration starts above confirmed store code 432", (
     { CM_BUILD_ID: "", PROJECT_BUILD_NUMBER: "40" },
   ]) {
     const config = appConfig(environment);
-    assert.equal(config.android.versionCode, 433);
-    assert.equal(config.ios.buildNumber, "433");
-    assert.ok(config.android.versionCode > 432);
+    assert.equal(config.android.versionCode, 516);
+    assert.equal(config.ios.buildNumber, "516");
     assert.equal(config.version, require("../package.json").version);
   }
 });
@@ -62,10 +61,10 @@ test("successive Codemagic project builds produce newer Android and iOS packages
     PROJECT_BUILD_NUMBER: "41",
     BUILD_NUMBER: "2",
   });
-  assert.equal(previous.android.versionCode, 473);
-  assert.equal(previous.ios.buildNumber, "473");
-  assert.equal(next.android.versionCode, 474);
-  assert.equal(next.ios.buildNumber, "474");
+  assert.equal(previous.android.versionCode, 555);
+  assert.equal(previous.ios.buildNumber, "555");
+  assert.equal(next.android.versionCode, 556);
+  assert.equal(next.ios.buildNumber, "556");
   assert.equal(next.android.package, "com.souqhamad.app");
   assert.equal(next.ios.bundleIdentifier, "com.souqhamad.app");
 });
@@ -96,17 +95,15 @@ test("the new release remains above the previous build formula for a continuing 
       CM_BUILD_ID: "next-release-build", PROJECT_BUILD_NUMBER: String(counter + 1),
     });
     assert.ok(nextBuild > previousBuild);
-    assert.ok(nextBuild > 432);
-    assert.equal(nextBuild, 433 + counter + 1);
+    assert.equal(nextBuild, 515 + counter + 1);
   }
 });
 
-test("a reset Codemagic counter still starts above confirmed store code 432", () => {
+test("a reset Codemagic counter still starts above recorded store code 515", () => {
   const minimumBuild = buildNumbers.resolveNativeBuildNumber({
     CM_BUILD_ID: "reset-project-build", PROJECT_BUILD_NUMBER: "1",
   });
-  assert.equal(minimumBuild, 434);
-  assert.ok(minimumBuild > 432);
+  assert.equal(minimumBuild, 516);
 });
 
 test("Codemagic rejects missing or malformed counters instead of reusing a store build", () => {
@@ -133,11 +130,11 @@ test("Android's maximum version code is respected without rounding oversized inp
   assert.equal(
     buildNumbers.resolveNativeBuildNumber({
       CM_BUILD_ID: "codemagic-build",
-      PROJECT_BUILD_NUMBER: "2099999567",
+      PROJECT_BUILD_NUMBER: "2099999485",
     }),
     2_100_000_000,
   );
-  for (const counter of ["2099999568", "9007199254740993"]) {
+  for (const counter of ["2099999486", "9007199254740993"]) {
     assert.throws(
       () => buildNumbers.resolveNativeBuildNumber({ CM_BUILD_ID: "codemagic-build", PROJECT_BUILD_NUMBER: counter }),
       /versionCode limit/,
@@ -156,25 +153,25 @@ test("Codemagic preflight requires its build context and prints a fresh minimum 
   });
   assert.equal(valid.status, 0, valid.stderr);
   assert.deepEqual(JSON.parse(valid.stdout), {
-    version: require("../package.json").version, androidVersionCode: 434, iosBuildNumber: "434",
+    version: require("../package.json").version, androidVersionCode: 516, iosBuildNumber: "516",
   });
 });
 
-test("Codemagic refuses a generated Android project that still contains store build 432", () => {
+test("Codemagic refuses a generated Android project that still contains store build 515", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "souq-release-version-"));
   const gradle = path.join(directory, "generated-build.gradle");
   const script = path.resolve(__dirname, "../scripts/native-build-number.cjs");
   const version = require("../package.json").version;
   const options = { env: { ...process.env, CM_BUILD_ID: "release-build", PROJECT_BUILD_NUMBER: "1" }, encoding: "utf8" };
   try {
-    fs.writeFileSync(gradle, `versionCode 432\nversionName "${version}"\n`);
+    fs.writeFileSync(gradle, `versionCode 515\nversionName "${version}"\n`);
     const stale = spawnSync(process.execPath, [script, "--codemagic", "--android-gradle", gradle], options);
     assert.equal(stale.status, 1);
-    assert.match(stale.stderr, /found .*\(432\)/);
-    fs.writeFileSync(gradle, `versionCode 434\nversionName "${version}"\n`);
+    assert.match(stale.stderr, /found .*\(515\)/);
+    fs.writeFileSync(gradle, `versionCode 516\nversionName "${version}"\n`);
     const fresh = spawnSync(process.execPath, [script, "--codemagic", "--android-gradle", gradle], options);
     assert.equal(fresh.status, 0, fresh.stderr);
-    assert.equal(JSON.parse(fresh.stdout).androidVersionCode, 434);
+    assert.equal(JSON.parse(fresh.stdout).androidVersionCode, 516);
   } finally {
     const resolvedDirectory = fs.realpathSync(directory);
     assert.equal(path.dirname(resolvedDirectory), fs.realpathSync(os.tmpdir()));
