@@ -4,11 +4,11 @@ const path = require('node:path');
 const { readCatalogData } = require('./read-catalog-data.cjs');
 const appRoot = path.resolve(__dirname, '..');
 const catalogFiles = ['lib/marketplace/categories.ts', 'lib/marketplace/category-options.ts', 'lib/marketplace/car-models.ts', 'lib/marketplace/cities.ts', 'lib/platform/policies.ts'];
-// Support sibling release folders and the existing development checkouts.
-// Detect only the public modules; never load server config.
+// Support independent repositories with the app nested in the server folder or
+// beside SmartStoreAI. Detect only the public modules; never load server config.
 const serverRoot = process.env.SMARTSTORE_SERVER_ROOT
   ? path.resolve(process.env.SMARTSTORE_SERVER_ROOT)
-  : [path.resolve(appRoot, '..'), path.resolve(appRoot, '../server'), path.resolve(appRoot, '../SmartStoreAI')].find(candidate =>
+  : [path.resolve(appRoot, '..'), path.resolve(appRoot, '../SmartStoreAI')].find(candidate =>
     catalogFiles.every(relative => fs.existsSync(path.join(candidate, relative))));
 if (!serverRoot)
   throw new Error('Cannot find the public server catalog modules. Set SMARTSTORE_SERVER_ROOT to the server repository root.');

@@ -1,16 +1,17 @@
-const LAST_KNOWN_PLAY_VERSION_CODE = 515;
+const BASE_BUILD_NUMBER = 433;
 const MAX_ANDROID_VERSION_CODE = 2_100_000_000;
 
 /**
  * Codemagic's project counter spans workflows, unlike BUILD_NUMBER.
- * Start above the highest store code recorded for release 1.0.58, even
- * when the Codemagic project and its counter are recreated. Check the floor
- * against all Play tracks before resetting the counter again.
+ * The floor is above confirmed Google Play code 432 for release 1.0.57.
+ * Keep the continuing project counter monotonic; compare the floor with
+ * the highest store code again before any later project/counter reset.
+ * Local builds and EAS retain their own configured versioning behavior.
  * @param {Record<string, string | undefined>} environment
  * @returns {number}
  */
 function resolveNativeBuildNumber(environment) {
-  if (!environment.CM_BUILD_ID) return LAST_KNOWN_PLAY_VERSION_CODE + 1;
+  if (!environment.CM_BUILD_ID) return BASE_BUILD_NUMBER;
 
   const counter = environment.PROJECT_BUILD_NUMBER;
   if (!counter || !/^[1-9]\d*$/.test(counter)) {
@@ -20,7 +21,7 @@ function resolveNativeBuildNumber(environment) {
   }
 
   const projectBuildNumber = Number(counter);
-  const nativeBuildNumber = LAST_KNOWN_PLAY_VERSION_CODE + projectBuildNumber;
+  const nativeBuildNumber = BASE_BUILD_NUMBER + projectBuildNumber;
   if (
     !Number.isSafeInteger(projectBuildNumber) ||
     nativeBuildNumber > MAX_ANDROID_VERSION_CODE

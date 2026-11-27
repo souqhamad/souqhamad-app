@@ -36,6 +36,9 @@ workflows:
       - name: Typecheck and lint
         script: |
           "$CM_BUILD_DIR/.tools/node_modules/.bin/pnpm" check
+      - name: Verify native integration contracts
+        script: |
+          "$CM_BUILD_DIR/.tools/node_modules/.bin/pnpm" test
       - name: Verify bundled Android resource names
         script: |
           set -euo pipefail
@@ -115,6 +118,9 @@ workflows:
       - name: Typecheck and lint
         script: |
           "$CM_BUILD_DIR/.tools/node_modules/.bin/pnpm" check
+      - name: Verify native integration contracts
+        script: |
+          "$CM_BUILD_DIR/.tools/node_modules/.bin/pnpm" test
       - name: Generate iOS project
         script: |
           set -euo pipefail

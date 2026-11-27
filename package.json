@@ -60,6 +60,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs tests/*.test.cjs",
     "export": "expo export --platform all",
     "sync:catalog": "node scripts/sync-market-catalog.cjs",
     "check": "tsc --noEmit && eslint ."
@@ -80,9 +81,7 @@
   "expo": {
     "autolinking": {
       "ios": {
-        "exclude": [
-          "@react-native-google-signin/google-signin"
-        ]
+        "exclude": ["@react-native-google-signin/google-signin"]
       }
     }
   },
