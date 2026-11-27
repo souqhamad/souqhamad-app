@@ -1,0 +1,152 @@
+workflows:
+  android-release:
+    name: Souq Hamad Android Release
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+      cancel_previous_builds: true
+    environment:
+      groups:
+        - android_signing
+      node: v22.23.3
+      java: 17
+      vars:
+        APP_VARIANT: production
+        EXPO_PUBLIC_API_URL: https://souqhamad.com
+    scripts:
+      - name: Verify Node runtime
+        script: node scripts/verify-node.cjs
+      - name: Verify store build number
+        script: node scripts/native-build-number.cjs --codemagic
+      - name: Verify Android notification configuration
+        script: node scripts/verify-android-release.cjs
+      - name: Install pinned pnpm locally
+        script: |
+          npm install --prefix "$CM_BUILD_DIR/.tools" --no-save --no-audit --no-fund pnpm@10.32.1
+          "$CM_BUILD_DIR/.tools/node_modules/.bin/pnpm" --version
+      - name: Install dependencies
+        script: |
+          "$CM_BUILD_DIR/.tools/node_modules/.bin/pnpm" install --frozen-lockfile
+      - name: Typecheck and lint
+        script: |
+          "$CM_BUILD_DIR/.tools/node_modules/.bin/pnpm" check
+      - name: Verify bundled Android resource names
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.tools/node_modules/.bin/pnpm" exec expo export --platform android --dump-assetmap --output-dir .data/android-resource-check
+          node scripts/verify-android-assets.cjs .data/android-resource-check/assetmap.json
+      - name: Generate Android project
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.tools/node_modules/.bin/pnpm" exec expo prebuild --platform android --no-install
+          node scripts/native-build-number.cjs --codemagic --android-gradle android/app/build.gradle
+          node scripts/verify-android-release.cjs --generated android
+      - name: Prepare Android signing keystore
+        script: |
+          set -euo pipefail
+          : "${CM_KEYSTORE:?CM_KEYSTORE is missing from the android_signing group}"
+          : "${CM_KEYSTORE_PASSWORD:?CM_KEYSTORE_PASSWORD is missing from the android_signing group}"
+          : "${CM_KEY_ALIAS:?CM_KEY_ALIAS is missing from the android_signing group}"
+          : "${CM_KEY_PASSWORD:?CM_KEY_PASSWORD is missing from the android_signing group}"
+          : "${CM_ENV:?Codemagic did not provide CM_ENV}"
+          export KEYSTORE_PATH="$CM_BUILD_DIR/souq-hamad-release.keystore"
+          node <<'NODE'
+          const fs = require("node:fs");
+          const encoded = process.env.CM_KEYSTORE.replace(/\s/g, "");
+          if (!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
+            throw new Error("CM_KEYSTORE is not valid base64");
+          }
+          const keystore = Buffer.from(encoded, "base64");
+          if (!keystore.length || keystore.toString("base64").replace(/=+$/, "") !== encoded.replace(/=+$/, "")) {
+            throw new Error("CM_KEYSTORE did not decode to a valid keystore file");
+          }
+          fs.writeFileSync(process.env.KEYSTORE_PATH, keystore, { mode: 0o600 });
+          NODE
+          printf 'CM_KEYSTORE_PATH=%s\n' "$KEYSTORE_PATH" >> "$CM_ENV"
+      - name: Build signed Android App Bundle
+        script: |
+          printf 'sdk.dir=%s\n' "$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
+          cd "$CM_BUILD_DIR/android"
+          ./gradlew bundleRelease
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/*.mapping.txt
+      - /tmp/xcodebuild_logs/*.log
+
+  ios-release:
+    name: Souq Hamad iOS Release
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    # Launch manually after configuring the ios_release secret group and Apple services.
+    environment:
+      groups:
+        - ios_release
+      node: v22.23.3
+      xcode: "26.6"
+      cocoapods: default
+      vars:
+        APP_VARIANT: production
+        EXPO_PUBLIC_API_URL: https://souqhamad.com
+        BUNDLE_ID: com.souqhamad.app
+    scripts:
+      - name: Verify Node runtime
+        script: node scripts/verify-node.cjs
+      - name: Verify store build number
+        script: node scripts/native-build-number.cjs --codemagic
+      - name: Verify iOS signing inputs and App Store toolchain
+        script: |
+          set -euo pipefail
+          node scripts/verify-ios-ci.cjs --environment
+          node scripts/verify-ios-ci.cjs --toolchain
+          node scripts/verify-ios-release.cjs --platform ios
+      - name: Install pinned pnpm locally
+        script: |
+          npm install --prefix "$CM_BUILD_DIR/.tools" --no-save --no-audit --no-fund pnpm@10.32.1
+          "$CM_BUILD_DIR/.tools/node_modules/.bin/pnpm" --version
+      - name: Install dependencies
+        script: |
+          "$CM_BUILD_DIR/.tools/node_modules/.bin/pnpm" install --frozen-lockfile
+      - name: Typecheck and lint
+        script: |
+          "$CM_BUILD_DIR/.tools/node_modules/.bin/pnpm" check
+      - name: Generate iOS project
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.tools/node_modules/.bin/pnpm" exec expo prebuild --platform ios --no-install
+      - name: Install CocoaPods dependencies
+        script: cd ios && pod install
+      - name: Fetch App Store distribution signing files
+        script: |
+          set -euo pipefail
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --strict-match-identifier --create
+          keychain add-certificates
+      - name: Apply iOS signing profiles
+        script: |
+          set -euo pipefail
+          IOS_PROJECT="$(find "$CM_BUILD_DIR/ios" -mindepth 1 -maxdepth 1 -name '*.xcodeproj' -print -quit)"
+          test -n "$IOS_PROJECT"
+          xcode-project use-profiles --project "$IOS_PROJECT"
+      - name: Build signed iOS IPA
+        script: |
+          set -euo pipefail
+          IOS_PROJECT="$(find "$CM_BUILD_DIR/ios" -mindepth 1 -maxdepth 1 -name '*.xcodeproj' -print -quit)"
+          IOS_WORKSPACE="$(find "$CM_BUILD_DIR/ios" -mindepth 1 -maxdepth 1 -name '*.xcworkspace' -print -quit)"
+          test -n "$IOS_PROJECT"
+          test -n "$IOS_WORKSPACE"
+          IOS_SCHEME_FILE="$(find "$IOS_PROJECT/xcshareddata/xcschemes" -maxdepth 1 -name '*.xcscheme' -print -quit)"
+          IOS_SCHEME="$(basename "$IOS_SCHEME_FILE" .xcscheme)"
+          test -n "$IOS_SCHEME"
+          xcode-project build-ipa --workspace "$IOS_WORKSPACE" --scheme "$IOS_SCHEME"
+      - name: Verify signed IPA version and Apple capabilities
+        script: node scripts/verify-ios-ci.cjs --ipa-directory build/ios/ipa
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
