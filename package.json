@@ -3,7 +3,7 @@
   "version": "1.0.58",
   "main": "expo-router/entry",
   "dependencies": {
-    "@ai-sdk/react": "4.0.183",
+    "@ai-sdk/react": "4.0.186",
     "@expo-google-fonts/ibm-plex-sans-arabic": "^0.4.2",
     "@expo/metro-runtime": "~58.0.17",
     "@expo/vector-icons": "^15.0.2",
